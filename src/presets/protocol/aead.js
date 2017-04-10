@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import libsodium from 'libsodium-wrappers';
 import {IPreset} from '../interface';
 import {Utils, BYTE_ORDER_LE, AdvancedBuffer} from '../../utils';
 
@@ -8,9 +9,12 @@ const MIN_CHUNK_LEN = TAG_LEN * 2 + 3;
 const MAX_DATA_LEN = 0x3FFF;
 
 // available ciphers
-const ciphers = [
-  'aes-128-gcm', 'aes-192-gcm', 'aes-256-gcm'
-];
+const CIPHER_INFOS = {
+  'aes-128-gcm': 16,
+  'aes-192-gcm': 24,
+  'aes-256-gcm': 32,
+  'chacha20-ietf-poly1305': 32
+};
 
 const HKDF_HASH_ALGORITHM = 'sha1';
 
@@ -136,7 +140,7 @@ export default class AeadProtocol extends IPreset {
     if (typeof cipher === 'undefined' || cipher === '') {
       throw Error('\'protocol_params\' requires [cipher] parameter.');
     }
-    if (!ciphers.includes(cipher)) {
+    if (!Object.keys(CIPHER_INFOS).includes(cipher)) {
       throw Error(`cipher \'${cipher}\' is not supported.`);
     }
     this._cipherName = cipher;
@@ -148,7 +152,7 @@ export default class AeadProtocol extends IPreset {
   beforeOut({buffer}) {
     let salt = null;
     if (this._cipherKey === null) {
-      const size = this._cipherName.split('-')[1] / 8; // key and salt size
+      const size = CIPHER_INFOS[this._cipherName]; // key and salt size
       salt = crypto.randomBytes(size);
       this._cipherKey = HKDF(salt, Utils.EVP_BytesToKey(__KEY__, size, 16), this._info, size);
     }
@@ -171,7 +175,7 @@ export default class AeadProtocol extends IPreset {
 
   onReceiving(buffer, {fail}) {
     if (this._decipherKey === null) {
-      const size = this._cipherName.split('-')[1] / 8; // key and salt size
+      const size = CIPHER_INFOS[this._cipherName]; // key and salt size
       if (buffer.length < size) {
         return; // too short to get salt
       }
