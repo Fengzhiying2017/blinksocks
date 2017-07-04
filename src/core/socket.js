@@ -37,8 +37,6 @@ let lastServer = null;
 
 export class Socket {
 
-  _id = null;
-
   _onClose = null;
 
   _isHandshakeDone = false;
@@ -62,7 +60,7 @@ export class Socket {
   // +---+-----------------------+---+
   _tracks = []; // [`target`, 'u', '20', 'u', '20', 'd', '10', ...]
 
-  constructor({id, socket, onClose}) {
+  constructor({socket, onClose}) {
     this.onForward = this.onForward.bind(this);
     this.onBackward = this.onBackward.bind(this);
     this.onError = this.onError.bind(this);
@@ -72,7 +70,6 @@ export class Socket {
     this.onForwardSocketDrain = this.onForwardSocketDrain.bind(this);
     this.onForwardSocketTimeout = this.onForwardSocketTimeout.bind(this);
     this.onForwardSocketClose = this.onForwardSocketClose.bind(this);
-    this._id = id;
     this._onClose = onClose;
     this._remoteAddress = socket.remoteAddress;
     this._remotePort = socket.remotePort;
@@ -97,10 +94,6 @@ export class Socket {
   }
 
   // getters
-
-  get id() {
-    return this._id;
-  }
 
   get remote() {
     return `${this._remoteAddress}:${this._remotePort}`;
