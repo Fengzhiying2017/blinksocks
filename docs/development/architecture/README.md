@@ -254,22 +254,25 @@ export default class CustomPreset extends IPreset {
 
 **available constants**
 
-| NAME                |
-| :------------------ |
-| \_\_ALL_CONFIG\_\_  |
-| \_\_IS_SERVER\_\_   |
-| \_\_IS_CLIENT\_\_   |
-| \_\_LOCAL_HOST\_\_  |
-| \_\_LOCAL_PORT\_\_  |
-| \_\_TRANSPORT\_\_   |
-| \_\_SERVER_HOST\_\_ |
-| \_\_SERVER_PORT\_\_ |
-| \_\_SERVERS\_\_     |
-| \_\_KEY\_\_         |
-| \_\_PRESETS\_\_     |
-| \_\_DNS\_\_         |
-| \_\_REDIRECT\_\_    |
-| \_\_TIMEOUT\_\_     |
-| \_\_LOG_LEVEL\_\_   |
-| \_\_PROFILE\_\_     |
-| \_\_IS_WATCH\_\_    |
+| NAME                   | AVAILABLE ON |
+| :--------------------- | :----------- |
+| \_\_ALL_CONFIG\_\_     | both         |
+| \_\_IS_SERVER\_\_      | both         |
+| \_\_IS_CLIENT\_\_      | both         |
+| \_\_IS_TCP\_\_         | both         |
+| \_\_IS_UDP\_\_         | both         |
+| \_\_LOCAL_HOST\_\_     | both         |
+| \_\_LOCAL_PORT\_\_     | both         |
+| \_\_KEY\_\_            | both         |
+| \_\_PRESETS\_\_        | both         |
+| \_\_DNS\_\_            | both         |
+| \_\_IS_TCP_FORWARD\_\_ | server       |
+| \_\_IS_UDP_FORWARD\_\_ | server       |
+| \_\_REDIRECT\_\_       | server       |
+| \_\_TIMEOUT\_\_        | both         |
+| \_\_LOG_LEVEL\_\_      | both         |
+| \_\_PROFILE\_\_        | both         |
+| \_\_IS_WATCH\_\_       | both         |
+| \_\_SERVER_HOST\_\_    | client       |
+| \_\_SERVER_PORT\_\_    | client       |
+| \_\_SERVERS\_\_        | client       |

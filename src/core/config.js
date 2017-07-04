@@ -178,13 +178,17 @@ export class Config {
     if (typeof json.servers !== 'undefined') {
       global.__SERVERS__ = json.servers.filter((server) => server.enabled);
       global.__IS_CLIENT__ = true;
+      global.__IS_SERVER__ = !global.__IS_CLIENT__;
     } else {
       global.__IS_CLIENT__ = false;
+      global.__IS_SERVER__ = !global.__IS_CLIENT__;
       this.initServer(json);
     }
 
-    global.__IS_SERVER__ = !global.__IS_CLIENT__;
-    global.__REDIRECT__ = json.redirect;
+    if (__IS_SERVER__) {
+      global.__REDIRECT__ = json.redirect;
+    }
+
     global.__TIMEOUT__ = json.timeout;
     global.__PROFILE__ = !!json.profile;
     global.__IS_WATCH__ = !!json.watch;
@@ -200,9 +204,20 @@ export class Config {
   static initServer(server) {
     this.validateServer(server);
 
-    global.__TRANSPORT__ = server.transport.toLowerCase().split(':');
-    global.__SERVER_HOST__ = server.host;
-    global.__SERVER_PORT__ = server.port;
+    const transport = server.transport.toLowerCase().split(':');
+    global.__IS_TCP__ = transport[0] === 'tcp';
+    global.__IS_UDP__ = !__IS_TCP__;
+
+    if (__IS_SERVER__) {
+      global.__IS_TCP_FORWARD__ = transport[1] === 'tcp';
+      global.__IS_UDP_FORWARD__ = !__IS_TCP_FORWARD__;
+    }
+
+    if (__IS_CLIENT__) {
+      global.__SERVER_HOST__ = server.host;
+      global.__SERVER_PORT__ = server.port;
+    }
+
     global.__KEY__ = server.key;
     global.__PRESETS__ = server.presets;
   }
