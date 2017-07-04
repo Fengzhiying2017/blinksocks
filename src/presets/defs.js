@@ -11,7 +11,11 @@ export class IPreset {
     return false;
   }
 
-  // hooks
+  // +-----------------------------------------------+
+  // |                      TCP                      |
+  // +-----------------------------------------------+
+
+  // hooks for TCP
 
   beforeOut({buffer/* , next, broadcast, direct, fail */}) {
     return buffer;
@@ -21,7 +25,7 @@ export class IPreset {
     return buffer;
   }
 
-  // the following interfaces must be implemented
+  // interfaces for TCP
 
   clientOut({buffer/* , next, broadcast, direct, fail */}) {
     return buffer;
@@ -36,6 +40,38 @@ export class IPreset {
   }
 
   clientIn({buffer/* , next, broadcast, direct, fail */}) {
+    return buffer;
+  }
+
+  // +-----------------------------------------------+
+  // |                      UDP                      |
+  // +-----------------------------------------------+
+
+  // hooks for UDP
+
+  beforeOutUdp({buffer/* , next, broadcast, direct, fail */}) {
+    return buffer;
+  }
+
+  beforeInUdp({buffer/* , next, broadcast, direct, fail */}) {
+    return buffer;
+  }
+
+  // interfaces for UDP
+
+  clientOutUdp({buffer/* , next, broadcast, direct, fail */}) {
+    return buffer;
+  }
+
+  serverInUdp({buffer/* , next, broadcast, direct, fail */}) {
+    return buffer;
+  }
+
+  serverOutUdp({buffer/* , next, broadcast, direct, fail */}) {
+    return buffer;
+  }
+
+  clientInUdp({buffer/* , next, broadcast, direct, fail */}) {
     return buffer;
   }
 

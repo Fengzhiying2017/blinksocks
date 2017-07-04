@@ -62,11 +62,7 @@ export class Hub {
 
   onConnect(socket) {
     const id = nextId();
-    const instance = new Socket({
-      id,
-      socket,
-      onClose: this.onSocketClose
-    });
+    const instance = new Socket({id, socket, onClose: this.onSocketClose});
     this._sockets.push(instance);
     logger.info(`[hub] [${socket.remoteAddress}:${socket.remotePort}] connected`);
     Profile.connections += 1;

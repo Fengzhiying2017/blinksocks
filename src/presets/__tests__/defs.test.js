@@ -22,4 +22,13 @@ describe('IPreset#beforeIn,beforeOut,clientOut,serverIn,serverOut,clientIn', fun
     expect(instance.clientIn(params)).toBe(null);
   });
 
+  it('should return null', function () {
+    expect(instance.beforeInUdp(params)).toBe(null);
+    expect(instance.beforeOutUdp(params)).toBe(null);
+    expect(instance.clientOutUdp(params)).toBe(null);
+    expect(instance.serverInUdp(params)).toBe(null);
+    expect(instance.serverOutUdp(params)).toBe(null);
+    expect(instance.clientInUdp(params)).toBe(null);
+  });
+
 });
