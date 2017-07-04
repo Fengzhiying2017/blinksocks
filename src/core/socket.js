@@ -41,10 +41,6 @@ export class Socket {
 
   _isHandshakeDone = false;
 
-  _remoteAddress = '';
-
-  _remotePort = '';
-
   _bsocket = null;
 
   _fsocket = null;
@@ -71,20 +67,19 @@ export class Socket {
     this.onForwardSocketTimeout = this.onForwardSocketTimeout.bind(this);
     this.onForwardSocketClose = this.onForwardSocketClose.bind(this);
     this._onClose = onClose;
-    this._remoteAddress = socket.remoteAddress;
-    this._remotePort = socket.remotePort;
     this._bsocket = socket;
     this._bsocket.on('error', this.onError);
     this._bsocket.on('close', this.onBackwardSocketClose);
-    this._bsocket.on('timeout', this.onBackwardSocketTimeout.bind(this, {
-      host: this._remoteAddress,
-      port: this._remotePort
-    }));
-    this._bsocket.on('data', this.onForward);
-    this._bsocket.on('drain', this.onBackwardSocketDrain);
-    this._bsocket.setTimeout(__TIMEOUT__ * 1e3);
+
+    if (__IS_TCP__) {
+      this._bsocket.on('timeout', this.onBackwardSocketTimeout);
+      this._bsocket.on('data', this.onForward);
+      this._bsocket.on('drain', this.onBackwardSocketDrain);
+      this._bsocket.setTimeout(__TIMEOUT__ * 1e3);
+    }
+
     if (__IS_SERVER__) {
-      this._tracks.push(`${this._remoteAddress}:${this._remotePort}`);
+      this._tracks.push(this.remote);
       this.createPipe();
     } else {
       this._proxy = new ClientProxy({
@@ -96,7 +91,8 @@ export class Socket {
   // getters
 
   get remote() {
-    return `${this._remoteAddress}:${this._remotePort}`;
+    const {address, port} = this._bsocket.address();
+    return `${address}:${port}`;
   }
 
   get fsocketWritable() {
@@ -199,8 +195,8 @@ export class Socket {
     }
   }
 
-  onBackwardSocketTimeout({host, port}) {
-    logger.warn(`[socket] [${host}:${port}] timeout: no I/O on the connection for ${__TIMEOUT__}s`);
+  onBackwardSocketTimeout() {
+    logger.warn(`[socket] [${this.remote}] timeout: no I/O on the connection for ${__TIMEOUT__}s`);
     this.onBackwardSocketClose();
   }
 
