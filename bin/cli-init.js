@@ -34,8 +34,9 @@ const clientJs = `module.exports = {
       // allow to use this server or not
       enabled: true,
 
-      // the transport layer, "tcp" or "udp"
-      transport: 'tcp',
+      // the transport layer, "tcp:tcp", "tcp:udp", "udp:udp" or "udp:tcp"
+      // Note that the second part is always ignored on client side.
+      transport: 'tcp:tcp',
 
       // server host name or ip address
       host: "example.com",
@@ -96,8 +97,8 @@ const serverJs = `module.exports = {
   // local port to be listen on
   port: 5678,
 
-  // the transport layer, "tcp" or "udp"
-  transport: 'tcp',
+  // the transport layer, "tcp:tcp", "tcp:udp"(not recommend), "udp:udp" or "udp:tcp"
+  transport: 'tcp:tcp',
 
   // a secret key for encryption/description
   key: "${key}",

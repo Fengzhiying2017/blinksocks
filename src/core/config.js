@@ -99,8 +99,20 @@ export class Config {
       throw Error('\'server.transport\' must be a string');
     }
 
-    if (!['tcp', 'udp'].includes(server.transport.toLowerCase())) {
-      throw Error('\'server.transport\' must be one of "tcp" or "udp"');
+    // backward compatible for transport
+    let transport = server.transport.toLowerCase();
+
+    if (transport === 'tcp') {
+      transport = 'tcp:tcp';
+    }
+
+    if (transport === 'udp') {
+      transport = 'udp:udp';
+    }
+
+    const trans = ['tcp:tcp', 'udp:udp', 'tcp:udp', 'udp:tcp'];
+    if (!trans.includes(transport)) {
+      throw Error(`'server.transport' must be one of ${trans}`);
     }
 
     // host
@@ -188,7 +200,7 @@ export class Config {
   static initServer(server) {
     this.validateServer(server);
 
-    global.__TRANSPORT__ = server.transport;
+    global.__TRANSPORT__ = server.transport.toLowerCase().split(':');
     global.__SERVER_HOST__ = server.host;
     global.__SERVER_PORT__ = server.port;
     global.__KEY__ = server.key;
