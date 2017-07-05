@@ -1,3 +1,4 @@
+import dgram from 'dgram';
 import net from 'net';
 import logger from './logger';
 import {Config} from './config';
@@ -28,9 +29,8 @@ export class Hub {
       Config.init(config);
     }
     logger.level = __LOG_LEVEL__;
-    this._hub = net.createServer();
-    this._hub.on('close', this.onClose.bind(this));
-    this._hub.on('connection', this.onConnect.bind(this));
+    this.onClose = this.onClose.bind(this);
+    this.onConnect = this.onConnect.bind(this);
     this.onSocketClose = this.onSocketClose.bind(this);
   }
 
@@ -53,6 +53,7 @@ export class Hub {
     }
   }
 
+  // when socket want to close itself
   onSocketClose(socket) {
     this._sockets = this._sockets.filter(({id}) => id !== socket.id);
     Profile.connections = this._sockets.length;
@@ -60,6 +61,7 @@ export class Hub {
     // global.gc && global.gc();
   }
 
+  // tcp only
   onConnect(socket) {
     const id = nextId();
     const instance = new Socket({id, socket, onClose: this.onSocketClose});
@@ -73,10 +75,12 @@ export class Hub {
       host: __LOCAL_HOST__,
       port: __LOCAL_PORT__
     };
-    this._hub.listen(options, () => {
+
+    const onStarted = (isUdp = false) => {
       logger.info(`==> [hub] use configuration: ${JSON.stringify(__ALL_CONFIG__)}`);
-      logger.info(`==> [hub] running as: ${__IS_SERVER__ ? 'Server' : 'Client'}`);
-      logger.info(`==> [hub] listening on: ${JSON.stringify(this._hub.address())}`);
+      logger.info(`==> [hub] transport layer: ${isUdp ? 'udp' : 'tcp'}`);
+      logger.info(`==> [hub] running as: ${__IS_SERVER__ ? 'server' : 'client'}`);
+      logger.info(`==> [hub] ${isUdp ? 'binding' : 'listening'} on: ${JSON.stringify(this._hub.address())}`);
       if (__IS_CLIENT__) {
         logger.info('==> [balancer] started');
         Balancer.start(__SERVERS__);
@@ -88,12 +92,25 @@ export class Hub {
       if (typeof callback === 'function') {
         callback();
       }
-    });
+    };
+
+    if (__IS_SERVER__ && __IS_UDP__) {
+      this._hub = dgram.createSocket('udp4');
+      this._hub.on('listening', () => onStarted(true));
+      this._hub.on('message', (buffer, rinfo) => {
+        logger.info(buffer);
+        logger.info(rinfo);
+      });
+      this._hub.bind(options.port, options.host);
+    } else {
+      this._hub = net.createServer();
+      this._hub.on('connection', this.onConnect);
+      this._hub.listen(options, onStarted);
+    }
   }
 
   terminate() {
-    this._hub.close();
-    this.onClose();
+    this._hub.close(this.onClose);
   }
 
 }
