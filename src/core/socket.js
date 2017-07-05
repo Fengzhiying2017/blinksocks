@@ -7,18 +7,12 @@ import {Config} from './config';
 import {ClientProxy} from './client-proxy';
 import {DNSCache} from './dns-cache';
 import {Balancer} from './balancer';
-import {Pipe} from './pipe';
+import {Processor} from './processor';
 import {Profile} from './profile';
 import {
   MIDDLEWARE_DIRECTION_UPWARD,
-  MIDDLEWARE_DIRECTION_DOWNWARD,
-  createMiddleware
+  MIDDLEWARE_DIRECTION_DOWNWARD
 } from './middleware';
-
-import {
-  SOCKET_CONNECT_TO_DST,
-  PROCESSING_FAILED
-} from '../presets/defs';
 
 import {ATYP_DOMAIN} from '../proxies/common';
 
@@ -39,13 +33,17 @@ export class Socket {
 
   _onClose = null;
 
+  // when socks/http connection established on client side
+  // when client tcp connection established on server side
   _isHandshakeDone = false;
+
+  _remote = null;
 
   _bsocket = null;
 
   _fsocket = null;
 
-  _pipe = null;
+  _processor = null;
 
   _isRedirect = false; // server only
 
@@ -66,12 +64,15 @@ export class Socket {
     this.onForwardSocketDrain = this.onForwardSocketDrain.bind(this);
     this.onForwardSocketTimeout = this.onForwardSocketTimeout.bind(this);
     this.onForwardSocketClose = this.onForwardSocketClose.bind(this);
+
     this._onClose = onClose;
+    this._remote = socket.address();
     this._bsocket = socket;
     this._bsocket.on('error', this.onError);
     this._bsocket.on('close', this.onBackwardSocketClose);
 
-    if (__IS_TCP__) {
+    if (__IS_CLIENT__ || __IS_TCP__) {
+      // tcp only
       this._bsocket.on('timeout', this.onBackwardSocketTimeout);
       this._bsocket.on('data', this.onForward);
       this._bsocket.on('drain', this.onBackwardSocketDrain);
@@ -80,8 +81,10 @@ export class Socket {
 
     if (__IS_SERVER__) {
       this._tracks.push(this.remote);
-      this.createPipe();
-    } else {
+      this._processor = this.createProcessor();
+    }
+
+    if (__IS_CLIENT__) {
       this._proxy = new ClientProxy({
         onHandshakeDone: this.onHandshakeDone.bind(this)
       });
@@ -91,7 +94,7 @@ export class Socket {
   // getters
 
   get remote() {
-    const {address, port} = this._bsocket.address();
+    const {address, port} = this._remote;
     return `${address}:${port}`;
   }
 
@@ -237,7 +240,9 @@ export class Socket {
       addr.port.readUInt16BE(0)
     ];
     return this.connect({host: __SERVER_HOST__, port: __SERVER_PORT__, dstHost, dstPort}, () => {
-      this.createPipe(addr);
+      this._processor = this.createProcessor({
+        presetsInitialParams: {'ss-base': addr}
+      });
       this._tracks.push(`${dstHost}:${dstPort}`);
       this._isHandshakeDone = true;
       callback(this.onForward);
@@ -262,7 +267,7 @@ export class Socket {
 
     if (this.fsocketWritable) {
       try {
-        this._pipe.feed(MIDDLEWARE_DIRECTION_UPWARD, buffer);
+        this._processor.feed(MIDDLEWARE_DIRECTION_UPWARD, buffer);
       } catch (err) {
         logger.error(`[socket] [${this.remote}]`, err);
       }
@@ -272,7 +277,7 @@ export class Socket {
   serverIn(buffer) {
     if (this.fsocketWritable || !this._isHandshakeDone) {
       try {
-        this._pipe.feed(MIDDLEWARE_DIRECTION_DOWNWARD, buffer);
+        this._processor.feed(MIDDLEWARE_DIRECTION_DOWNWARD, buffer);
         this._tracks.push(TRACK_CHAR_DOWNLOAD);
         this._tracks.push(buffer.length);
       } catch (err) {
@@ -284,7 +289,7 @@ export class Socket {
   serverOut(buffer) {
     if (this.bsocketWritable) {
       try {
-        this._pipe.feed(MIDDLEWARE_DIRECTION_UPWARD, buffer);
+        this._processor.feed(MIDDLEWARE_DIRECTION_UPWARD, buffer);
       } catch (err) {
         logger.error(`[socket] [${this.remote}]`, err);
       }
@@ -294,7 +299,7 @@ export class Socket {
   clientIn(buffer) {
     if (this.bsocketWritable) {
       try {
-        this._pipe.feed(MIDDLEWARE_DIRECTION_DOWNWARD, buffer);
+        this._processor.feed(MIDDLEWARE_DIRECTION_DOWNWARD, buffer);
         this._tracks.push(TRACK_CHAR_DOWNLOAD);
         this._tracks.push(buffer.length);
       } catch (err) {
@@ -386,48 +391,30 @@ export class Socket {
     }
   }
 
-  // pipe
+  // processor
 
   /**
-   * create pipes for both data forward and backward
+   * create processor for both data forward and backward
    */
-  createPipe(addr) {
-    const presets = __PRESETS__.map(
-      (preset, i) => createMiddleware(preset.name, {
-        ...preset.params,
-        ...(i === 0 ? addr : {})
-      })
-    );
-    this._pipe = new Pipe({onNotified: this.onPipeNotified.bind(this)});
-    this._pipe.setMiddlewares(MIDDLEWARE_DIRECTION_UPWARD, presets);
-    this._pipe.on(`next_${MIDDLEWARE_DIRECTION_UPWARD}`, (buf) => this.send(MIDDLEWARE_DIRECTION_UPWARD, buf));
-    this._pipe.on(`next_${MIDDLEWARE_DIRECTION_DOWNWARD}`, (buf) => this.send(MIDDLEWARE_DIRECTION_DOWNWARD, buf));
-  }
-
-  /**
-   * if no action were caught by middlewares
-   * @param action
-   * @returns {*}
-   */
-  onPipeNotified(action) {
-    if (__IS_SERVER__ && action.type === SOCKET_CONNECT_TO_DST) {
-      const {targetAddress, onConnected} = action.payload;
-      return this.connect(targetAddress, () => {
+  createProcessor(options) {
+    const processor = new Processor(options);
+    processor.on('data', this.send.bind(this));
+    processor.on('connect', ({targetAddress, onConnected}) =>
+      this.connect(targetAddress, () => {
         this._isHandshakeDone = true;
         onConnected();
-      });
-    }
-    if (action.type === PROCESSING_FAILED) {
-      return this.onPresetFailed(action);
-    }
+      })
+    );
+    processor.on('error', this.onPresetFailed);
+    return processor;
   }
 
   /**
    * if any preset failed, this function will be called
-   * @param action
+   * @param message
+   * @param orgData
    */
-  onPresetFailed(action) {
-    const {message, orgData} = action.payload;
+  onPresetFailed({message, orgData}) {
     if (__IS_SERVER__ && __REDIRECT__ !== '' && this._fsocket === null) {
       const [host, port] = __REDIRECT__.split(':');
       logger.error(`[socket] [${this.remote}] connection is redirected to ${host}:${port} due to: ${message}`);
