@@ -100,9 +100,10 @@ export class Hub {
 
     if (__IS_SERVER__ && __IS_UDP__) {
       this._hub = dgram.createSocket('udp4');
-      this._udpSocket = new Socket({socket: this._hub});
       this._hub.on('listening', () => onStarted(true));
-      this._hub.bind(options.port, options.host);
+      this._hub.bind(options.port, options.host, () => {
+        this._udpSocket = new Socket({socket: this._hub});
+      });
     } else {
       this._hub = net.createServer();
       this._hub.on('connection', this.onConnect);
