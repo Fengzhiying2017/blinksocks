@@ -15,10 +15,7 @@ import {
 } from './middleware';
 
 import {ATYP_DOMAIN} from '../proxies/common';
-
-// import {
-//   UdpRequestMessage
-// } from '../proxies/socks5';
+import {UdpRequestMessage} from '../proxies/socks5';
 
 const dnsCache = DNSCache.create();
 
@@ -71,12 +68,17 @@ export class Socket {
     this._bsocket.on('error', this.onError);
     this._bsocket.on('close', this.onBackwardSocketClose);
 
+    // _bsocket is always tcp on client side
     if (__IS_CLIENT__ || __IS_TCP__) {
-      // tcp only
       this._bsocket.on('timeout', this.onBackwardSocketTimeout);
       this._bsocket.on('data', this.onForward);
       this._bsocket.on('drain', this.onBackwardSocketDrain);
       this._bsocket.setTimeout(__TIMEOUT__ * 1e3);
+    }
+
+    // udp only
+    if (__IS_SERVER__ && __IS_UDP__) {
+      this._bsocket.on('message', this.onForward);
     }
 
     if (__IS_SERVER__) {
@@ -230,6 +232,7 @@ export class Socket {
     // select a server via Balancer
     const server = Balancer.getFastest();
     if (lastServer === null || !isEqual(server, lastServer)) {
+      // __IS_TCP__ and __IS_UDP__ are set after initServer()
       Config.initServer(server);
       lastServer = server;
       logger.info(`[balancer] use: ${__SERVER_HOST__}:${__SERVER_PORT__}`);
@@ -252,22 +255,21 @@ export class Socket {
   // pipe chain
 
   clientOut(buffer) {
-    // let _buffer = buffer;
+    let _buffer = buffer;
 
-    // TODO: udp compatible
-    // if (this._socksUdpReady) {
-    //   const request = UdpRequestMessage.parse(buffer);
-    //   if (request !== null) {
-    //     _buffer = request.DATA; // just drop RSV and FRAG
-    //   } else {
-    //     logger.warn(`[socket] [${this.remote}] -x-> dropped unidentified packet ${buffer.length} bytes`);
-    //     return;
-    //   }
-    // }
+    if (__IS_UDP__) {
+      const request = UdpRequestMessage.parse(buffer);
+      if (request !== null) {
+        _buffer = request.DATA;
+      } else {
+        logger.warn(`[socket] [${this.remote}] dropped unidentified udp message ${buffer.length} bytes`, buffer);
+        return;
+      }
+    }
 
     if (this.fsocketWritable) {
       try {
-        this._processor.feed(MIDDLEWARE_DIRECTION_UPWARD, buffer);
+        this._processor.feed(MIDDLEWARE_DIRECTION_UPWARD, _buffer);
       } catch (err) {
         logger.error(`[socket] [${this.remote}]`, err);
       }
