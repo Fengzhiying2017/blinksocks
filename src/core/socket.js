@@ -1,3 +1,4 @@
+import dgram from 'dgram';
 import net from 'net';
 import ip from 'ip';
 import isEqual from 'lodash.isequal';
@@ -78,7 +79,11 @@ export class Socket {
 
     // udp only
     if (__IS_SERVER__ && __IS_UDP__) {
-      this._bsocket.on('message', this.onForward);
+      this._bsocket.on('message', (buffer, rinfo) => {
+        // Note: implement socket.write for udp socket here.
+        this._bsocket.write = (buffer) => this._bsocket.send(buffer, rinfo.port, rinfo.address);
+        this.onForward(buffer);
+      });
     }
 
     if (__IS_SERVER__) {
@@ -101,11 +106,19 @@ export class Socket {
   }
 
   get fsocketWritable() {
-    return this._fsocket !== null && !this._fsocket.destroyed && this._fsocket.writable;
+    if (__IS_UDP__) {
+      return true;
+    } else {
+      return this._fsocket !== null && !this._fsocket.destroyed && this._fsocket.writable;
+    }
   }
 
   get bsocketWritable() {
-    return this._bsocket !== null && !this._bsocket.destroyed && this._bsocket.writable;
+    if (__IS_UDP__) {
+      return true;
+    } else {
+      return this._bsocket !== null && !this._bsocket.destroyed && this._bsocket.writable;
+    }
   }
 
   // events
@@ -232,17 +245,23 @@ export class Socket {
     // select a server via Balancer
     const server = Balancer.getFastest();
     if (lastServer === null || !isEqual(server, lastServer)) {
-      // __IS_TCP__ and __IS_UDP__ are set after initServer()
+      // Note: __IS_TCP__ and __IS_UDP__ are set after initServer()
       Config.initServer(server);
       lastServer = server;
       logger.info(`[balancer] use: ${__SERVER_HOST__}:${__SERVER_PORT__}`);
     }
-    // connect to our server
+
     const [dstHost, dstPort] = [
       (addr.type === ATYP_DOMAIN) ? addr.host.toString() : ip.toString(addr.host),
       addr.port.readUInt16BE(0)
     ];
-    return this.connect({host: __SERVER_HOST__, port: __SERVER_PORT__, dstHost, dstPort}, () => {
+
+    // connect to our server
+    if (__IS_TCP__) {
+      logger.info(`[socket] [${this.remote}] request: ${dstHost}:${dstPort}, connecting to: ${__SERVER_HOST__}:${__SERVER_PORT__}`);
+    }
+
+    return this.connect({host: __SERVER_HOST__, port: __SERVER_PORT__}, () => {
       this._processor = this.createProcessor({
         presetsInitialParams: {'ss-base': addr}
       });
@@ -361,31 +380,33 @@ export class Socket {
    * connect to another endpoint, for both client and server
    * @param host
    * @param port
-   * @param dstHost
-   * @param dstPort
    * @param callback
    * @returns {Promise.<void>}
    */
-  async connect({host, port, dstHost, dstPort}, callback) {
+  async connect({host, port}, callback) {
     // host could be empty, see https://github.com/blinksocks/blinksocks/issues/34
     if (host && port) {
-      if (__IS_CLIENT__) {
-        logger.info(`[socket] [${this.remote}] request: ${dstHost}:${dstPort}, connecting to: ${host}:${port}`);
-      } else {
-        logger.info(`[socket] [${this.remote}] connecting to: ${host}:${port}`);
-      }
       this._tracks.push(`${host}:${port}`);
-      try {
-        const ip = await dnsCache.get(host);
-        this._fsocket = net.connect({host: ip, port}, callback);
-        this._fsocket.on('error', this.onError);
-        this._fsocket.on('close', this.onForwardSocketClose);
-        this._fsocket.on('timeout', this.onForwardSocketTimeout.bind(this, {host, port}));
-        this._fsocket.on('data', this.onBackward);
-        this._fsocket.on('drain', this.onForwardSocketDrain);
-        this._fsocket.setTimeout(__TIMEOUT__ * 1e3);
-      } catch (err) {
-        logger.error(`[socket] [${this.remote}] connect to ${host}:${port} failed due to: ${err.message}`);
+      if (__IS_TCP__) {
+        try {
+          const ip = await dnsCache.get(host);
+          this._fsocket = net.connect({host: ip, port}, callback);
+          this._fsocket.on('error', this.onError);
+          this._fsocket.on('close', this.onForwardSocketClose);
+          this._fsocket.on('timeout', this.onForwardSocketTimeout.bind(this, {host, port}));
+          this._fsocket.on('data', this.onBackward);
+          this._fsocket.on('drain', this.onForwardSocketDrain);
+          this._fsocket.setTimeout(__TIMEOUT__ * 1e3);
+        } catch (err) {
+          logger.error(`[socket] [${this.remote}] connect to ${host}:${port} failed due to: ${err.message}`);
+        }
+      }
+      if (__IS_UDP__) {
+        this._fsocket = dgram.createSocket('udp4');
+        this._fsocket.on('message', this.onBackward);
+        // Note: implement socket.write for udp socket here.
+        this._fsocket.write = (buffer) => this._fsocket.send(buffer, port, host);
+        callback();
       }
     } else {
       logger.warn(`unexpected host=${host} port=${port}`);
@@ -401,12 +422,14 @@ export class Socket {
   createProcessor(options) {
     const processor = new Processor(options);
     processor.on('data', this.send.bind(this));
-    processor.on('connect', ({targetAddress, onConnected}) =>
-      this.connect(targetAddress, () => {
+    processor.on('connect', ({targetAddress, onConnected}) => {
+      const {host, port} = targetAddress;
+      logger.info(`[socket] [${this.remote}] connecting to: ${host}:${port}`);
+      return this.connect(targetAddress, () => {
         this._isHandshakeDone = true;
         onConnected();
-      })
-    );
+      });
+    });
     processor.on('error', this.onPresetFailed);
     return processor;
   }
