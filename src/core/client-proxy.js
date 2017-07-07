@@ -44,7 +44,7 @@ export class ClientProxy {
   }
 
   isDone() {
-    return [this._socksTcpReady, this._socksUdpReady, this._httpReady].some((v) => !!v);
+    return this._socksTcpReady || this._socksUdpReady || this._httpReady;
   }
 
   makeHandshake(socket, buffer) {
