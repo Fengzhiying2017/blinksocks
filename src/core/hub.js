@@ -20,7 +20,9 @@ export class Hub {
 
   _hub = null; // instance of class net.Server
 
-  _sockets = []; // instances of our class Socket
+  _sockets = []; // instances of TcpSocket
+
+  _udpSocket = null; // instance of UdpSocket
 
   _isClosed = false;
 
@@ -30,8 +32,8 @@ export class Hub {
     }
     logger.level = __LOG_LEVEL__;
     this.onClose = this.onClose.bind(this);
-    this.onConnect = this.onConnect.bind(this);
     this.onSocketClose = this.onSocketClose.bind(this);
+    this.onConnect = this.onConnect.bind(this);
   }
 
   onClose() {
@@ -61,12 +63,12 @@ export class Hub {
     // global.gc && global.gc();
   }
 
-  // tcp only
   onConnect(socket) {
     const id = nextId();
+    const {address, port} = socket.address();
     const instance = new Socket({id, socket, onClose: this.onSocketClose});
     this._sockets.push(instance);
-    logger.info(`[hub] [${socket.remoteAddress}:${socket.remotePort}] connected`);
+    logger.info(`[hub] [${address}:${port}] connected`);
     Profile.connections += 1;
   }
 
@@ -78,7 +80,9 @@ export class Hub {
 
     const onStarted = (isUdp = false) => {
       logger.info(`==> [hub] use configuration: ${JSON.stringify(__ALL_CONFIG__)}`);
-      logger.info(`==> [hub] transport layer: ${isUdp ? 'udp' : 'tcp'}`);
+      if (__IS_SERVER__) {
+        logger.info(`==> [hub] transport layer: ${isUdp ? 'udp' : 'tcp'}`);
+      }
       logger.info(`==> [hub] running as: ${__IS_SERVER__ ? 'server' : 'client'}`);
       logger.info(`==> [hub] ${isUdp ? 'binding' : 'listening'} on: ${JSON.stringify(this._hub.address())}`);
       if (__IS_CLIENT__) {
@@ -96,11 +100,8 @@ export class Hub {
 
     if (__IS_SERVER__ && __IS_UDP__) {
       this._hub = dgram.createSocket('udp4');
+      this._udpSocket = new Socket({socket: this._hub});
       this._hub.on('listening', () => onStarted(true));
-      this._hub.on('message', (buffer, rinfo) => {
-        logger.info(buffer);
-        logger.info(rinfo);
-      });
       this._hub.bind(options.port, options.host);
     } else {
       this._hub = net.createServer();
