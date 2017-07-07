@@ -66,19 +66,23 @@ export class UdpRequestMessage extends Message {
 
     let DSTADDR = null;
     let DSTPORT = null;
+    let DATA = null;
     switch (buffer[3]) {
       case ATYP_DOMAIN:
         DSTADDR = buffer.slice(5, 5 + buffer[4]);
         DSTPORT = buffer.slice(5 + buffer[4], 7 + buffer[4]);
+        DATA = buffer.slice(7 + buffer[4]);
         break;
       case ATYP_V6:
         DSTADDR = buffer.slice(4, 20);
         DSTPORT = buffer.slice(20, 22);
+        DATA = buffer.slice(22);
         break;
       default:
         // ATYP_V4
         DSTADDR = buffer.slice(4, 8);
         DSTPORT = buffer.slice(8, 10);
+        DATA = buffer.slice(10);
         break;
     }
 
@@ -88,7 +92,7 @@ export class UdpRequestMessage extends Message {
       ATYP: buffer[3],
       DSTADDR,
       DSTPORT,
-      DATA: buffer.slice(6 + DSTADDR.length)
+      DATA
     });
   }
 
