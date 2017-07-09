@@ -21,7 +21,7 @@ Socks.createConnection(options, function (err, socket) {
   if (err) {
     console.log(err);
   } else {
-    const pack = Socks.createUDPFrame({host: "bing.com", port: 80}, new Buffer("hello"));
+    const pack = Socks.createUDPFrame({host: "bilibili.com", port: 80}, new Buffer("GET /index/data/promote-tag.json HTTP/1.1\r\nHost: bilibili.com\r\n\r\n"));
     socket.write(pack);
   }
 });
