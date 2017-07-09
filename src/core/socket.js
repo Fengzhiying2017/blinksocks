@@ -387,7 +387,7 @@ export class Socket {
     // host could be empty, see https://github.com/blinksocks/blinksocks/issues/34
     if (host && port) {
       this._tracks.push(`${host}:${port}`);
-      if (__IS_TCP__) {
+      if ((__IS_CLIENT__ && __IS_TCP__) || (__IS_SERVER__ && __IS_TCP_FORWARD__)) {
         try {
           const ip = await dnsCache.get(host);
           this._fsocket = net.connect({host: ip, port}, callback);
@@ -401,7 +401,7 @@ export class Socket {
           logger.error(`[socket] [${this.remote}] connect to ${host}:${port} failed due to: ${err.message}`);
         }
       }
-      if (__IS_UDP__) {
+      if ((__IS_CLIENT__ && __IS_UDP__) || (__IS_SERVER__ && __IS_UDP_FORWARD__)) {
         this._fsocket = dgram.createSocket('udp4');
         this._fsocket.on('message', this.onBackward);
         // Note: implement socket.write for udp socket here.
